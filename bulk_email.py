@@ -1,6 +1,7 @@
 import random
 import smtplib
 import ssl
+import sys
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -55,47 +56,53 @@ def read_files():
 
 def send_email(sender_email, sender_name, password, context, port, email_list, name_list, body_list):
     with smtplib.SMTP_SSL("smtp.gmail.com", port, context=context) as server:
-        server.login(sender_email, password)
-        print('Welcome,email will be sent shortly')
+        try:
+            server.login(sender_email, password)
 
-        for receiver_email, receiver_name in zip(email_list, name_list):
-            secure_random = random.SystemRandom()
-            html = secure_random.choice(body_list)
+            print(f'Email will be sent shortly by {sender_email}')
 
-            html = f"""\
-                <html>
-                 <body>
-                   <p>Hello {receiver_name}</p><br>
-                   {html}
-                 </body>
-                </html>
-            """
+            for receiver_email, receiver_name in zip(email_list, name_list):
+                secure_random = random.SystemRandom()
+                html = secure_random.choice(body_list)
 
-            message = MIMEMultipart("alternative")
-            message["Subject"] = "Re: Facebook"
-            message["From"] = f"{sender_name} <{sender_email}>"
-            message["To"] = receiver_email
+                html = f"""\
+                    <html>
+                     <body>
+                       <p>Hello {receiver_name}</p><br>
+                       {html}
+                     </body>
+                    </html>
+                """
 
-            part1 = MIMEText(html, "html")
+                message = MIMEMultipart("alternative")
+                message["Subject"] = "Re: Facebook"
+                message["From"] = f"{sender_name} <{sender_email}>"
+                message["To"] = receiver_email
 
-            filename = "attachment.jpg"
+                part1 = MIMEText(html, "html")
 
-            with open(filename, "rb") as attachment:
-                part2 = MIMEBase("application", "octet-stream")
-                part2.set_payload(attachment.read())
+                filename = "attachment.jpg"
 
-            encoders.encode_base64(part2)
+                with open(filename, "rb") as attachment:
+                    part2 = MIMEBase("application", "octet-stream")
+                    part2.set_payload(attachment.read())
 
-            part2.add_header(
-                "Content-Disposition",
-                f"attachment; filename= {filename}",
-            )
+                encoders.encode_base64(part2)
 
-            message.attach(part1)
-            message.attach(part2)
+                part2.add_header(
+                    "Content-Disposition",
+                    f"attachment; filename= {filename}",
+                )
 
-            print(f"Mail Send To {receiver_email}")
-            server.sendmail(sender_email, receiver_email, message.as_string())
+                message.attach(part1)
+                message.attach(part2)
+
+                print(f"Mail Send To {receiver_email}")
+                server.sendmail(sender_email, receiver_email,
+                                message.as_string())
+        except Exception as e:
+            print(f"We Faced Some Problem With This Sender {sender_email}.Don't Worry We Will Try To Send These Email Using Another Sender")
+            return False
 
 
 def split(arr, count):
@@ -110,11 +117,35 @@ if __name__ == '__main__':
     email_list_chunk = split(email_list, limit)
     name_list_chunk = split(name_list, limit)
 
+    failed_email_list = []
+    failed_name_list = []
+    success_sender_index = []
     for i in range(limit):
         from_email, from_name, from_password, context, port = configure(
             sender_name[i], sender_email[i], sender_password[i])
 
-        send_email(from_email, from_name, from_password, context, port,
-                   email_list_chunk[i], name_list_chunk[i], body_list)
+        result = send_email(from_email, from_name, from_password, context,
+                            port, email_list_chunk[i], name_list_chunk[i], body_list)
+        if result == False:
+            failed_email_list.extend(email_list_chunk[i])
+            failed_name_list.extend(name_list_chunk[i])
+        else:
+            success_sender_index.append(i)
+            continue
+
+    if len(failed_email_list) == len(email_list):
+        print(
+            "Your All Sender Email Is Not Correct.Please Fix The Problem And Try It Again")
+        sys.exit()
+    else:
+        limit = len(success_sender_index)
+        email_list_chunk = split(failed_email_list, limit)
+        name_list_chunk = split(failed_name_list, limit)
+        for i in success_sender_index:
+            from_email, from_name, from_password, context, port = configure(
+                sender_name[i], sender_email[i], sender_password[i])
+
+            result = send_email(from_email, from_name, from_password, context,
+                                port, email_list_chunk[i], name_list_chunk[i], body_list)
 
     print('Complete')
